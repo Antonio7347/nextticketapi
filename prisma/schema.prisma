@@ -7,14 +7,212 @@ datasource db {
   provider = "postgresql"
 }
 
-model Book {
-  id              String   @id @default(uuid())
-  title           String
-  synopsis        String?
-  author          String
-  publicationYear Int
-  genre           String
-  publisher       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// ─── 1. Roles ───────────────────────────────────────────────
+model Rol {
+  idRol       String    @id @default(uuid()) @map("id_rol")
+  nombre      String    @db.VarChar(100)
+  descripcion String?
+
+  usuarios Usuario[]
+
+  @@map("roles")
+}
+
+// ─── 2. Recintos ────────────────────────────────────────────
+model Recinto {
+  idRecinto      String  @id @default(uuid()) @map("id_recinto")
+  nombre         String  @db.VarChar(255)
+  direccion      String? @db.VarChar(255)
+  ciudad         String? @db.VarChar(100)
+  capacidadTotal Int?    @map("capacidad_total")
+  descripcion    String?
+  estado         String? @db.VarChar(50)
+
+  zonas   Zona[]
+  eventos Evento[]
+
+  @@map("recintos")
+}
+
+// ─── 3. Usuarios ────────────────────────────────────────────
+model Usuario {
+  idUsuario    String   @id @default(uuid()) @map("id_usuario")
+  nombre       String   @db.VarChar(255)
+  correo       String   @unique @db.VarChar(255)
+  contrasena   String   @db.VarChar(255)
+  idRol        String?  @map("id_rol")
+  estado       String?  @db.VarChar(50)
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion")
+
+  rol                 Rol?                 @relation(fields: [idRol], references: [idRol])
+  eventosOrganizados  Evento[]
+  compras             Compra[]
+  bloqueos            BloqueoTemporal[]
+  validaciones        ValidacionBoleto[]
+
+  @@map("usuarios")
+}
+
+// ─── 4. Zonas ───────────────────────────────────────────────
+model Zona {
+  idZona      String   @id @default(uuid()) @map("id_zona")
+  idRecinto   String?  @map("id_recinto")
+  nombre      String   @db.VarChar(100)
+  descripcion String?
+  capacidad   Int?
+  precioBase  Decimal? @map("precio_base") @db.Decimal(10, 2)
+  colorMapa   String?  @map("color_mapa") @db.VarChar(50)
+  estado      String?  @db.VarChar(50)
+
+  recinto     Recinto?      @relation(fields: [idRecinto], references: [idRecinto])
+  asientos    Asiento[]
+  eventoZonas EventoZona[]
+
+  @@map("zonas")
+}
+
+// ─── 5. Eventos ─────────────────────────────────────────────
+model Evento {
+  idEvento      String    @id @default(uuid()) @map("id_evento")
+  idRecinto     String?   @map("id_recinto")
+  idOrganizador String?   @map("id_organizador")
+  nombre        String    @db.VarChar(255)
+  fechaHora     DateTime? @map("fecha_hora")
+  imagen        String?   @db.VarChar(255)
+  descripcion   String?
+  estado        String?   @db.VarChar(50)
+
+  recinto        Recinto?        @relation(fields: [idRecinto], references: [idRecinto])
+  organizador    Usuario?        @relation(fields: [idOrganizador], references: [idUsuario])
+  eventoZonas    EventoZona[]
+  eventoAsientos EventoAsiento[]
+  compras        Compra[]
+
+  @@map("eventos")
+}
+
+// ─── 6. Asientos ────────────────────────────────────────────
+model Asiento {
+  idAsiento   String  @id @default(uuid()) @map("id_asiento")
+  idZona      String? @map("id_zona")
+  fila        String? @db.VarChar(50)
+  numero      String? @db.VarChar(50)
+  tipo        String? @db.VarChar(50)
+  coordenadaX Int?    @map("coordenada_x")
+  coordenadaY Int?    @map("coordenada_y")
+  estado      String? @db.VarChar(50)
+
+  zona           Zona?           @relation(fields: [idZona], references: [idZona])
+  eventoAsientos EventoAsiento[]
+
+  @@map("asientos")
+}
+
+// ─── 7. Evento–Zonas ────────────────────────────────────────
+model EventoZona {
+  idEventoZona   String   @id @default(uuid()) @map("id_evento_zona")
+  idEvento       String?  @map("id_evento")
+  idZona         String?  @map("id_zona")
+  precioEvento   Decimal? @map("precio_evento") @db.Decimal(10, 2)
+  cupoDisponible Int?     @map("cupo_disponible")
+  estado         String?  @db.VarChar(50)
+
+  evento Evento? @relation(fields: [idEvento], references: [idEvento])
+  zona   Zona?   @relation(fields: [idZona], references: [idZona])
+
+  @@map("evento_zonas")
+}
+
+// ─── 8. Evento–Asientos ─────────────────────────────────────
+model EventoAsiento {
+  idEventoAsiento String  @id @default(uuid()) @map("id_evento_asiento")
+  idEvento        String? @map("id_evento")
+  idAsiento       String? @map("id_asiento")
+  estado          String? @db.VarChar(50)
+
+  evento          Evento?          @relation(fields: [idEvento], references: [idEvento])
+  asiento         Asiento?         @relation(fields: [idAsiento], references: [idAsiento])
+  detallesCompra  DetalleCompra[]
+  bloqueos        BloqueoTemporal[]
+  boletos         Boleto[]
+
+  @@map("evento_asientos")
+}
+
+// ─── 9. Compras ─────────────────────────────────────────────
+model Compra {
+  idCompra    String   @id @default(uuid()) @map("id_compra")
+  idUsuario   String?  @map("id_usuario")
+  idEvento    String?  @map("id_evento")
+  fechaCompra DateTime @default(now()) @map("fecha_compra")
+  total       Decimal? @db.Decimal(10, 2)
+  estado      String?  @db.VarChar(50)
+  tipoPago    String?  @map("tipo_pago") @db.VarChar(50)
+
+  usuario  Usuario?        @relation(fields: [idUsuario], references: [idUsuario])
+  evento   Evento?         @relation(fields: [idEvento], references: [idEvento])
+  detalles DetalleCompra[]
+  boletos  Boleto[]
+
+  @@map("compras")
+}
+
+// ─── 10. Detalle de Compra ──────────────────────────────────
+model DetalleCompra {
+  idDetalleCompra String   @id @default(uuid()) @map("id_detalle_compra")
+  idCompra        String?  @map("id_compra")
+  idEventoAsiento String?  @map("id_evento_asiento")
+  precioUnitario  Decimal? @map("precio_unitario") @db.Decimal(10, 2)
+  subtotal        Decimal? @db.Decimal(10, 2)
+
+  compra        Compra?        @relation(fields: [idCompra], references: [idCompra])
+  eventoAsiento EventoAsiento? @relation(fields: [idEventoAsiento], references: [idEventoAsiento])
+
+  @@map("detalle_compra")
+}
+
+// ─── 11. Bloqueos Temporales ────────────────────────────────
+model BloqueoTemporal {
+  idBloqueo       String    @id @default(uuid()) @map("id_bloqueo")
+  idUsuario       String?   @map("id_usuario")
+  idEventoAsiento String?   @map("id_evento_asiento")
+  fechaInicio     DateTime  @default(now()) @map("fecha_inicio")
+  fechaExpiracion DateTime? @map("fecha_expiracion")
+  estado          String?   @db.VarChar(50)
+
+  usuario       Usuario?       @relation(fields: [idUsuario], references: [idUsuario])
+  eventoAsiento EventoAsiento? @relation(fields: [idEventoAsiento], references: [idEventoAsiento])
+
+  @@map("bloqueos_temporales")
+}
+
+// ─── 12. Boletos ────────────────────────────────────────────
+model Boleto {
+  idBoleto        String   @id @default(uuid()) @map("id_boleto")
+  idCompra        String?  @map("id_compra")
+  idEventoAsiento String?  @map("id_evento_asiento")
+  folio           String?  @unique @db.VarChar(100)
+  codigoQr        String?  @map("codigo_qr")
+  fechaEmision    DateTime @default(now()) @map("fecha_emision")
+  estado          String?  @db.VarChar(50)
+
+  compra        Compra?            @relation(fields: [idCompra], references: [idCompra])
+  eventoAsiento EventoAsiento?     @relation(fields: [idEventoAsiento], references: [idEventoAsiento])
+  validaciones  ValidacionBoleto[]
+
+  @@map("boletos")
+}
+
+// ─── 13. Validaciones de Boletos ────────────────────────────
+model ValidacionBoleto {
+  idValidacion    String   @id @default(uuid()) @map("id_validacion")
+  idBoleto        String?  @map("id_boleto")
+  idValidador     String?  @map("id_validador")
+  fechaValidacion DateTime @default(now()) @map("fecha_validacion")
+  resultado       Boolean?
+
+  boleto    Boleto?  @relation(fields: [idBoleto], references: [idBoleto])
+  validador Usuario? @relation(fields: [idValidador], references: [idUsuario])
+
+  @@map("validaciones_boletos")
 }
